@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PhysX 碰撞演示</title>
+  <style>:root{--panel:#ffffffeb;--text:#1c2530;--muted:#5c6875;--line:#d5dce3;--accent:#1f7a4d;--accent-text:#fff;--btn:#eef2f5;--btn-hover:#e1e7ec;--error:#b3261e}*{box-sizing:border-box}html,body{height:100%;color:var(--text);background:#e8edf1;margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,PingFang SC,Microsoft YaHei,sans-serif;overflow:hidden}#view{width:100%;height:100%;display:block;position:fixed;inset:0}#panel{background:var(--panel);border:1px solid var(--line);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-radius:12px;width:296px;max-height:calc(100% - 24px);padding:14px 16px;position:fixed;top:12px;left:12px;overflow-y:auto;box-shadow:0 6px 24px #141e281f}h1{margin:0;font-size:17px}.sub{color:var(--muted);margin:2px 0 0;font-size:12px}section{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}h2{color:var(--muted);margin:0 0 8px;font-size:12px;font-weight:600}.row{flex-wrap:wrap;gap:6px;display:flex}button,.file-btn{font:inherit;color:var(--text);background:var(--btn);border:1px solid var(--line);cursor:pointer;border-radius:8px;padding:5px 10px}button:hover,.file-btn:hover{background:var(--btn-hover)}button.primary{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}button.primary:hover{filter:brightness(1.08)}label.opt{cursor:pointer;align-items:flex-start;gap:8px;margin:4px 0;display:flex}label.opt input{accent-color:var(--accent);margin-top:4px}label.opt small{color:var(--muted);font-size:12px;line-height:1.4;display:block}.hint{color:var(--muted);margin:6px 0 0;font-size:12px}input[type=file]{display:none}dl{font-variant-numeric:tabular-nums;grid-template-columns:auto 1fr;gap:2px 12px;margin:0;display:grid}dt{color:var(--muted)}dd{text-align:right;margin:0}#status{color:var(--muted);overflow-wrap:anywhere;min-height:18px;margin:10px 0 0;font-size:12px}#status.error{color:var(--error)}#tips{background:var(--panel);border:1px solid var(--line);color:var(--muted);white-space:nowrap;pointer-events:none;border-radius:999px;padding:5px 14px;font-size:12px;position:fixed;bottom:12px;left:50%;transform:translate(-50%)}#drop{border:3px dashed var(--accent);color:var(--accent);pointer-events:none;background:#1f7a4d29;justify-content:center;align-items:center;font-size:20px;font-weight:600;display:none;position:fixed;inset:0}#drop.on{display:flex}#loading{color:var(--muted);pointer-events:none;justify-content:center;align-items:center;font-size:15px;display:flex;position:fixed;inset:0}</style>
+  <script type="module" crossorigin src="./assets/index-gR9fRYMY.js"></script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="loading">正在加载 PhysX…</div>
+
+  <div id="panel">
+    <h1>PhysX 碰撞演示</h1>
+    <p class="sub" id="engine">NVIDIA PhysX · WebAssembly · CPU</p>
+
+    <section>
+      <h2>投放示例模型</h2>
+      <div class="row" id="samples">
+        <button data-model="mug">杯子</button>
+        <button data-model="chair">椅子</button>
+        <button data-model="table">桌子</button>
+        <button data-model="crate">箱子</button>
+        <button data-model="torus">圆环</button>
+        <button id="rain" class="primary">随机 ×10</button>
+      </div>
+      <div class="row" id="imported" style="margin-top: 6px"></div>
+    </section>
+
+    <section>
+      <h2>导入自己的模型</h2>
+      <div class="row">
+        <label class="file-btn">选择文件…<input id="file" type="file" accept=".glb,.gltf,.obj,.stl,.ply" /></label>
+      </div>
+      <p class="hint">也可以把文件直接拖进窗口。支持 .glb .gltf .obj .stl .ply</p>
+      <label class="opt"><input type="radio" name="importMode" value="dynamic" checked />
+        <span>作为动态物体<small>会下落、碰撞、被撞飞；碰撞体用凸包</small></span></label>
+      <label class="opt"><input type="radio" name="importMode" value="static" />
+        <span>作为静态场景<small>固定不动；按模型原样做三角网格碰撞</small></span></label>
+    </section>
+
+    <section>
+      <h2>动态物体的碰撞体</h2>
+      <label class="opt"><input type="radio" name="collider" value="hull" checked />
+        <span>单个凸包<small>整个模型包成一个凸的外壳，凹陷和空洞被填平</small></span></label>
+      <label class="opt"><input type="radio" name="collider" value="parts" />
+        <span>每个部件一个凸包<small>模型的每个子网格各包一个凸包，能保留凹形</small></span></label>
+      <label class="opt"><input type="checkbox" id="debug" />
+        <span>显示碰撞体线框<small>绿线是 PhysX 实际用来计算碰撞的形状</small></span></label>
+    </section>
+
+    <section>
+      <div class="row">
+        <button id="pause">暂停</button>
+        <button id="reset">重置场景</button>
+      </div>
+    </section>
+
+    <section>
+      <dl>
+        <dt>模型刚体</dt><dd id="s-bodies">0</dd>
+        <dt>小球</dt><dd id="s-balls">0</dd>
+        <dt>物理计算耗时</dt><dd id="s-step">–</dd>
+        <dt>画面帧率</dt><dd id="s-fps">–</dd>
+      </dl>
+      <p id="status"></p>
+    </section>
+  </div>
+
+  <div id="tips">拖动旋转视角 · 滚轮缩放 · 点击场景发射小球</div>
+  <div id="drop">松开鼠标导入模型</div>
+
+</body>
+</html>
