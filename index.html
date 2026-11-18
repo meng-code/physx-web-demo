@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PhysX 碰撞演示</title>
+  <style>
+    :root {
+      --panel: rgba(255, 255, 255, 0.92);
+      --text: #1c2530;
+      --muted: #5c6875;
+      --line: #d5dce3;
+      --accent: #1f7a4d;
+      --accent-text: #ffffff;
+      --btn: #eef2f5;
+      --btn-hover: #e1e7ec;
+      --error: #b3261e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #e8edf1; color: var(--text);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #panel { position: fixed; top: 12px; left: 12px; width: 296px; max-height: calc(100% - 24px); overflow-y: auto;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+      backdrop-filter: blur(8px); box-shadow: 0 6px 24px rgba(20, 30, 40, 0.12); }
+    h1 { font-size: 17px; margin: 0; }
+    .sub { color: var(--muted); font-size: 12px; margin: 2px 0 0; }
+    section { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 10px; }
+    h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 8px; }
+    .row { display: flex; flex-wrap: wrap; gap: 6px; }
+    button, .file-btn { font: inherit; color: var(--text); background: var(--btn); border: 1px solid var(--line);
+      border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+    button:hover, .file-btn:hover { background: var(--btn-hover); }
+    button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+    button.primary:hover { filter: brightness(1.08); }
+    label.opt { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; cursor: pointer; }
+    label.opt input { margin-top: 4px; accent-color: var(--accent); }
+    label.opt small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+    input[type="file"] { display: none; }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-variant-numeric: tabular-nums; }
+    dt { color: var(--muted); }
+    dd { margin: 0; text-align: right; }
+    #status { margin: 10px 0 0; font-size: 12px; color: var(--muted); min-height: 18px; overflow-wrap: anywhere; }
+    #status.error { color: var(--error); }
+    #tips { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); background: var(--panel);
+      border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; font-size: 12px; color: var(--muted);
+      white-space: nowrap; pointer-events: none; }
+    #drop { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(31, 122, 77, 0.16); border: 3px dashed var(--accent); font-size: 20px; font-weight: 600;
+      color: var(--accent); pointer-events: none; }
+    #drop.on { display: flex; }
+    #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 15px; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="loading">正在加载 PhysX…</div>
+
+  <div id="panel">
+    <h1>PhysX 碰撞演示</h1>
+    <p class="sub" id="engine">NVIDIA PhysX · WebAssembly · CPU</p>
+
+    <section>
+      <h2>投放示例模型</h2>
+      <div class="row" id="samples">
+        <button data-model="mug">杯子</button>
+        <button data-model="chair">椅子</button>
+        <button data-model="table">桌子</button>
+        <button data-model="crate">箱子</button>
+        <button data-model="torus">圆环</button>
+        <button id="rain" class="primary">随机 ×10</button>
+      </div>
+      <div class="row" id="imported" style="margin-top: 6px"></div>
+    </section>
+
+    <section>
+      <h2>导入自己的模型</h2>
+      <div class="row">
+        <label class="file-btn">选择文件…<input id="file" type="file" accept=".glb,.gltf,.obj,.stl,.ply" /></label>
+      </div>
+      <p class="hint">也可以把文件直接拖进窗口。支持 .glb .gltf .obj .stl .ply</p>
+      <label class="opt"><input type="radio" name="importMode" value="dynamic" checked />
+        <span>作为动态物体<small>会下落、碰撞、被撞飞；碰撞体用凸包</small></span></label>
+      <label class="opt"><input type="radio" name="importMode" value="static" />
+        <span>作为静态场景<small>固定不动；按模型原样做三角网格碰撞</small></span></label>
+    </section>
+
+    <section>
+      <h2>动态物体的碰撞体</h2>
+      <label class="opt"><input type="radio" name="collider" value="hull" checked />
+        <span>单个凸包<small>整个模型包成一个凸的外壳，凹陷和空洞被填平</small></span></label>
+      <label class="opt"><input type="radio" name="collider" value="parts" />
+        <span>每个部件一个凸包<small>模型的每个子网格各包一个凸包，能保留凹形</small></span></label>
+      <label class="opt"><input type="checkbox" id="debug" />
+        <span>显示碰撞体线框<small>绿线是 PhysX 实际用来计算碰撞的形状</small></span></label>
+    </section>
+
+    <section>
+      <div class="row">
+        <button id="pause">暂停</button>
+        <button id="reset">重置场景</button>
+      </div>
+    </section>
+
+    <section>
+      <dl>
+        <dt>模型刚体</dt><dd id="s-bodies">0</dd>
+        <dt>小球</dt><dd id="s-balls">0</dd>
+        <dt>物理计算耗时</dt><dd id="s-step">–</dd>
+        <dt>画面帧率</dt><dd id="s-fps">–</dd>
+      </dl>
+      <p id="status"></p>
+    </section>
+  </div>
+
+  <div id="tips">拖动旋转视角 · 滚轮缩放 · 点击场景发射小球</div>
+  <div id="drop">松开鼠标导入模型</div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
